@@ -22,17 +22,20 @@
 %nonterm exp
        | exp1
        | exp2
+       | start
 
 %pos int
 
 %eop SEMICOLON
 
-%start exp
+%start start
 
 %verbose
 
 %%
 (* {rules} *)
+start : exp (exp)
+
 exp : IF exp1 THEN exp1 ELSE exp1 (Absyn.If (exp1, exp1, exp1))
     | exp1 (exp1)
 
