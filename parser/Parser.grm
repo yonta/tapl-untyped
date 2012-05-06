@@ -1,0 +1,47 @@
+(* {user declarations} *)
+%%
+(* {ML-Yacc declarations} *)
+
+(* This name means "Mini Lambda". *)
+%name TaplUntyped
+
+%term EOF
+    | TRUE
+    | FALSE
+    | IF
+    | THEN
+    | ELSE
+    | ZERO
+    | SUCC
+    | PRED
+    | ISZERO
+    | LPAREN
+    | RPAREN
+    | SEMICOLON
+
+%nonterm exp
+       | exp1
+       | exp2
+
+%pos int
+
+%eop SEMICOLON
+
+%start exp
+
+%verbose
+
+%%
+(* {rules} *)
+exp : IF exp1 THEN exp1 ELSE exp1 (Absyn.If (exp1, exp1, exp1))
+    | exp1 (exp1)
+
+exp1 : SUCC exp2 (Absyn.Succ exp2)
+     | PRED exp2 (Absyn.Pred exp2)
+     | ISZERO exp2 (Absyn.IsZero exp2)
+     | exp2 (exp2)
+
+exp2 : TRUE (Absyn.True)
+     | FALSE (Absyn.False)
+     | ZERO (Absyn.Zero)
+     | LPAREN exp RPAREN (exp)

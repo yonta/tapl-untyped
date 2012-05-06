@@ -1,0 +1,24 @@
+(* -*- sml -*- *)
+
+structure Absyn =
+struct
+  (*% *)
+  datatype exp =
+           (*%@format "true" *)
+           True
+         | (*%@format "false" *)
+           False
+         | (*%
+            * @format(cond*exptrue*expfalse)
+            *    "if" + cond +1 "then" + exptrue +1 "else" + expfalse
+            *)
+           If of exp * exp * exp
+         | (*%@format "0" *)
+           Zero
+         | (*%@format(exp) "succ(" exp ")" *)
+           Succ of exp
+         | (*%@format(exp) "pred(" exp ")" *)
+           Pred of exp
+         | (*%@format(exp) "iszero(" exp ")" *)
+           IsZero of exp
+end

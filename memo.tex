@@ -1,0 +1,242 @@
+\documentclass[a4paper,11pt]{jreport}
+
+\usepackage{verbatim}
+\usepackage{amssymb} % to use \checkmark
+
+\renewcommand{\thesection}{\arabic{section}.}
+\renewcommand{\thesubsection}{\arabic{section}.\arabic{subsection}}
+
+\newcommand{\bnfeq}{\mbox{::=}}
+\newcommand{\opt}{\mbox{　$\leftarrow$ optional}}
+\newcommand{\Ra}{\mbox{=>}}
+%\newcommand{\ra}{\mbox{\verb+->+}}
+%\newcommand{\sra}{\mbox{\  \verb+=>+\  }}
+\newcommand{\myint}{\mbox{int}}
+\newcommand{\mystring}{\mbox{string}}
+\newcommand{\dlb}{[\![}
+\newcommand{\drb}{]\!]}
+
+%--------------------------------------------------------------
+\parindent      1.0em
+\topmargin      0.0in
+\oddsidemargin  0.0in
+\evensidemargin 0.0in
+\textwidth      6.0in
+\textheight     8.77in
+%--------------------------------------------------------------
+
+\begin{document}
+
+\section{2010/03/01 Project is Started}
+プロジェクトスタート．演習のために簡単なインタープリタをＳＭＬ＃でフルに
+実装してみようと思う．
+
+\subsection{Task}
+\begin{itemize}
+ \item syntax \checkmark 3/1
+ \item semantic \checkmark 3/1
+ \item translate \checkmark 3/9
+ \item abstract machine \checkmark 3/9
+ \item code
+       \begin{itemize}
+        \item datatype (ppg file)
+        \item lexer \& parser (string \verb+->+ perseresult)
+        \item simplify (perseresult \verb+->+ parseresult)
+        \item code generator (parseresult \verb+->+ code)
+        \item (code transform, if need)
+        \item abstract machine (running code)
+       \end{itemize}
+\end{itemize}
+
+%-----------------------------------------------------------
+
+\section{Syntax}
+let文と$Pat$の部分に拡張があるので，この章以降も変更する必要がある．
+$string$とレコードはoptionalで余裕があったら後で実装する．
+
+\subsection{First Syntax}
+\begin{eqnarray*}
+ int & \bnfeq & [1-9][0-9]* \\
+ string & \bnfeq & \verb+ "([^""]|\")*" +  \opt \\
+ Var & \bnfeq & \verb= [a-zA-Z]+[a-zA-Z0-9]* | [symbol]+ = \\
+ Pat & \bnfeq & Var \mid (Var_1, \cdots , Var_n) \hspace{5em} (n \geq 2) \\
+ Exp & \bnfeq & int \mid string  \mid Exp + Exp \mid Exp - Exp
+  \mid Exp * Exp \mid Exp \ /\  Exp \\
+ & & \mid \verb+fn+ \  Pat \verb+ => + Exp \mid Exp \hspace{0.5em}
+ Exp \hspace{1em}(\mbox{left associative}) \\
+ & & \mid Pat \mid \#int \hspace{0.5em} Exp \hspace{1em}(\mbox{left
+  associative})\\
+ & & \mid \verb+let+ \  Dec* \  \verb+in+ \  Exp \  \verb+end+
+  \mid \verb+if+ \  Exp \  \verb+then+ \  Exp \  \verb+else+ \  Exp \\
+ & & \mid \verb+print + Exp \\
+ & & \mid \verb+{+ Var_1 = Exp_1, \cdots , Var_n = Exp_n \verb+}+
+ \hspace{1em}(n \geq 1) \mid \#Var \   Exp \opt \\
+ Dec & \bnfeq & \verb+fun+ \   Var \  Pat \  = \  Exp \mid \verb+val+ \
+  Var = Exp \mid Exp \\
+ Prg & \bnfeq & Dec \langle \verb+;+ \rangle Prg \mid \epsilon
+\end{eqnarray*}
+
+\subsection{Second Syntax}
+＋と×のような結合力の違いを文法を変更して適用する．
+
+\begin{eqnarray*}
+ Pat & \bnfeq & Var \mid (Var_1, \cdots , Var_n) \hspace{5em} (n \geq
+ 2) \\
+ Exp_e & \bnfeq & Int \mid Var \mid (Exp_{a1}, \cdots ,Exp_{an})
+  \hspace{1em} (n \geq 2) \mid \#int \mid \verb+print+ \\
+ & & \mid \verb+let+ \  Dec* \  \verb+in+ \  Exp_a \  \verb+end+ \mid
+  (Exp_a) \\
+ Exp_d & \bnfeq & Exp_e \mid Exp_d \hspace{0.5em} Exp_e \\
+ Exp_b & \bnfeq & Exp_c * Exp_b \mid Exp_c \ /\ Exp_b \mid Exp_b \\
+ Exp_b & \bnfeq & Exp_b + Exp_c \mid Exp_b - Exp_c \mid Exp_c \\
+ Exp_a & \bnfeq & \verb+fn+ \  Pat \verb+ => + Exp_a \mid \verb+if+ \
+  Exp_a \  \verb+then+ \  Exp_a \  \verb+else+ \  Exp_a  \mid Exp_b \\
+ Dec & \bnfeq & \verb+fun+ \   Var \  Pat \  = \  Exp_a \mid \verb+val+ \
+  Var = Exp_a \mid Exp_a \\
+ Prg & \bnfeq & Dec % \langle \verb+;+ \rangle Prg \mid \epsilon
+\end{eqnarray*}
+
+\subsection{Third Syntax}
+$Dec$内に$Exp$を置くと，let文で問題あり．この構文の間違いを修正．この間
+違いがshift/reduceコンフリクトも起こしていた．ついでにval文にパターン対
+応を追加．
+
+\begin{eqnarray*}
+ Pat & \bnfeq & Var \mid (Var_1, \cdots , Var_n) \hspace{5em} (n \geq
+ 2) \\
+ Exp_e & \bnfeq & Int \mid Var \mid (Exp_{a1}, \cdots ,Exp_{an})
+  \hspace{1em} (n \geq 2) \mid \#int \mid \verb+print+ \\
+ & & \mid \verb+let+ \  Dec* \  \verb+in+ \  Exp_a \  \verb+end+ \mid
+  (Exp_a) \\
+ Exp_d & \bnfeq & Exp_e \mid Exp_d \hspace{0.5em} Exp_e \\
+ Exp_b & \bnfeq & Exp_c * Exp_b \mid Exp_c \ /\ Exp_b \mid Exp_b \\
+ Exp_b & \bnfeq & Exp_b + Exp_c \mid Exp_b - Exp_c \mid Exp_c \\
+ Exp_a & \bnfeq & \verb+fn+ \  Pat \verb+ => + Exp_a \mid \verb+if+ \
+ Exp_a \  \verb+then+ \  Exp_a \  \verb+else+ \ Exp_a \mid Exp_b \\
+ Dec & \bnfeq & \verb+fun+ \   Var \  Pat \  = \  Exp_a \mid \verb+val+ \
+  Pat = Exp_a \\
+ Decs & \bnfeq & Dec \  Decs \mid Dec \\
+ Prg & \bnfeq & Decs \  \langle ; Prg \rangle \mid Exp_a \  \langle ; Prg \rangle
+\end{eqnarray*}
+
+%-----------------------------------------------------------
+
+\section{Semantic}
+StandardMLっぽくするのが目的．
+\begin{center}
+\begin{tabular}{crcl}
+%( $\beta$ ) & ( $\lambda$ x.M ) \  N & $\rightarrow$ & [N/x]M \\
+($\beta$) & $(\lambda x.M) \  N$ & $\rightarrow$ & $[N/x]M$ \\
+(fst) & $\# 1 \  (M_1, M_2) $ & $\rightarrow$ & $M_1$ \\
+(snd) & $\# 2 \  (M_1, M_2) $ & $\rightarrow$ & $M_2$ \\
+
+\end{tabular}
+\end{center}
+
+
+
+%-----------------------------------------------------------
+
+\section{Frontend}
+
+\subsection{Translation(Simplify)}
+名前的にはElaborationの方がSML\# と同じ？
+
+\begin{eqnarray*}
+ Exp & \rightarrow & \verb+val+ \   \verb+it+ = Exp \hspace{2em}
+  (\mbox{top expression}) \\
+ \verb+fun+ \   Var \  Pat = Exp \  \verb+->+ \  \verb+val+ & \rightarrow &
+  Var = \verb+fn+ \   Pat \  \verb+=>+ \   Exp \\
+ (Var_1, \cdots , Var_n) & \rightarrow &
+  (Var_1,(\cdots,(Var_{n-1},Var_n)\cdots)  \hspace{2em} (n \geq 2) \\
+ \verb+#+ n \hspace{0.5em} Exp & \rightarrow &
+  \underbrace{\#2(\cdots(\#2}_{n-1個}
+  (\#1 \hspace{0.5em}  Exp)\cdots )
+\end{eqnarray*}
+
+\subsection{Primitive}
+
+\begin{eqnarray*}
+ + & : & \myint * \myint \  \verb+->+ \   \myint \\
+ - & : & \myint * \myint \  \verb+->+ \ \myint \\
+ \ast & : & \myint * \myint \  \verb+->+ \ \myint \\
+ / & : & \myint * \myint \  \verb+->+ \ \myint \\
+ \verb+^+ & : & \mystring * \mystring \  \verb+->+ \ \mystring \opt
+\end{eqnarray*}
+
+%-----------------------------------------------------------
+
+\section{Backend}
+
+SECDマシーンで実行する．よってSECDマシーンコードに上記Syntaxでパースした
+構文を変換して，SECDマシーンで実行する．
+
+\begin{eqnarray*}
+ \verb+Eval+(E,M) = V & \Longleftrightarrow & (nil,E,\dlb M \drb, nil)
+  \  \rightarrow \hspace{-1em} ^* \hspace{1em} ([V],E,nil,nil)
+\end{eqnarray*}
+
+\subsection{Translation to SECD Machine code}
+
+\begin{eqnarray*}
+\dlb c \drb & = & [ c ] \\
+\dlb x \drb & = & [\verb+Acc+(x)]\\
+\dlb \lambda x.M \drb & = & [\verb+MakeCls+(x,\dlb M \drb @[\verb+Return+])] \\
+\dlb \mu f \lambda x.M \drb & = & [ \verb+MakeRec+(f,x,\dlb M \drb @
+ [\verb+Return+])] \\
+\dlb M_1 \hspace{0.5em} M_2 \drb & = & \dlb M_1 \drb @ \dlb M_2 \drb @
+ [\verb+App+] \\
+\dlb (M_1,M_2) \drb & = & \dlb M_1 \drb @ \dlb M_2 \drb @
+ [\verb+Pair+] \\
+\dlb M[1] \drb & = & \dlb M \drb @ [\verb+Fst+] \\
+\dlb M[2] \drb & = & \dlb M \drb @ [\verb+Snd+] \\
+% \dlb 1(M) \drb & = & \dlb M \drb @ [\verb+Inl+] \\
+% \dlb 2(M) \drb & = & \dlb M \drb @ [\verb+Inr+] \\
+% \dlb (\verb+case+ M_0 \verb+of+ 1(x) \Rightarrow M_1, 2(y) \Rightarrow
+%  M_2))\drb & = & \dlb M_0 \drb @ [\verb+Case+((x,\dlb M_1 \drb
+%  @[\verb+Return+]), (y,\dlb M_2 \drb @ [\verb+Return+]))]
+\dlb \verb+let + Dec \verb+ in + Exp \verb+ end + \drb & = &
+\verb+Let+( \dlb Dec \drb @ \dlb Exp \drb @ [\verb+Return+])
+\end{eqnarray*}
+
+\subsection{SECD Machine}
+
+\begin{eqnarray*}
+(S,E,\verb+Const+(c)::C,D) & \rightarrow &  (c::S,E,C,D) \\
+(S,E\{x:V\},\verb+Acc+(x)::C,D) & \rightarrow & (V::S,E\{x:V\},C,D) \\
+(S,E,\verb+MakeCls+(x,C_0)::C,D) & \rightarrow &
+ (\verb+Cls+(E,x,C_0)::S,E,C,D)) \\
+%(S,E,\verb+MakeRec+(f,x,C_0)::C,D) & \rightarrow &
+% (\verb+Rec+(E,f,x,C_0)::S,E,C,D) \\
+ (V::\verb+Cls+(E_0,x,C_0)::S,E,App::C,D) & \rightarrow &
+  (S,E_0\{x:V\},C_0,(C,E)::D) \\
+% (V::\verb+Rec+(E_0,f,x,C_0)::S,E,\verb+App+::C,D) & \rightarrow & 
+% (S,E_0\{f:\verb+Rec+(E_0,f,x,C_0)\}\{x:V\},C_0,(C,E)::D) \\
+(S,E,\verb+Return+::C,(C_0,E_0)::D) & \rightarrow & (S,E_0,C_0,D) \\
+(V_1::V_2::S,E,\verb+Pair+::C,D) & \rightarrow & ((V_2,V_1)::S,E,C,D) \\
+((V_1,V_2)::S,E,\verb+Fst+::C,D) & \rightarrow & (V_1::S,E,C,D) \\
+((V_1,V_2)::S,E,\verb+Snd+::C,D) & \rightarrow & (V_2::S,E,C,D) \\
+% (V::S,E,\verb+Inl+::C,D) & \rightarrow & (1(V)::S,E,C,D) \\
+% (V::S,E,\verb+Inr+::C,D) & \rightarrow & (2(V)::S,E,C,D) \\
+% (1(V)::S,E,\verb+Case+((x,C_1),(y,C_2))::C,D) & \rightarrow & 
+% (S,E\{x:V\},C_1,(C,E)::D) \\
+% (2(V)::S,E,\verb+Case+((x,C_1),(y,C_2))::C,D) & \rightarrow & 
+% (S,E\{x:V\},C_2,(C,E)::D) \\
+(S,E,\verb+Let+(C_0)::C,D) & \rightarrow & (S,E,C_0,(C,E)::D)
+\end{eqnarray*}
+
+%-----------------------------------------------------------
+
+\section{Yet Another Backend}
+
+\subsection{Using A-Normal Form}
+\subsubsection{A-Normalization}
+\subsubsection{CPS Transform}
+\subsection{Using 3-Address Code}
+\subsubsection{A-Normalization}
+\subsubsection{Transform to 3-Address Code(SSA)}
+
+%-----------------------------------------------------------
+%-----------------------------------------------------------
+
+\end{document}
