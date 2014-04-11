@@ -36,7 +36,7 @@ struct
   fun appResult f (Success (x, t)) = Success (f x, t)
     | appResult _ Miss = Miss
     | appResult _ No = No
-  fun look field (nowtable : table ref) =
+  fun look field nowtable =
       case ! nowtable of
           Table table => ! (field table)
   fun update field nowtable result =
@@ -68,9 +68,9 @@ struct
                Success (exp2, resultTable) =>
                Success (exp2, resultTable)
              | Miss => Miss
-             | No => raise Fail "Bug: right")
+             | No => raise Fail "Bug: *>")
         | Miss => Miss
-        | No => raise Fail "Bug: right"
+        | No => raise Fail "Bug: *>"
   fun (parser1 <* parser2) get1 table =
       case parser1 get1 table of
           Success (exp1, nextTable) =>
@@ -78,9 +78,9 @@ struct
                Success (exp2, resultTable) =>
                Success (exp1, resultTable)
              | Miss => Miss
-             | No => raise Fail "Bug: left")
+             | No => raise Fail "Bug: <*")
         | Miss => Miss
-        | No => raise Fail "Bug: left"
+        | No => raise Fail "Bug: <*"
   fun (parser1 ** parser2) mixer get1 table =
       case parser1 get1 table of
           Success (exp1, nextTable) =>
