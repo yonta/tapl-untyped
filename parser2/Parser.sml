@@ -3,12 +3,16 @@ local
   structure A = Absyn
   structure T = TextIO
 in
-structure Parser :
-          sig
+structure Parser
+(*
+          : sig
+            type 'a result
+            type 'a table
             val parser : (unit -> char option) -> unit -> A.exp
             val stringParser : string -> A.exp * string
             val mainParser : unit -> A.exp
           end
+*)
   =
 struct
   fun curry f x y = f (x,y)
@@ -18,74 +22,254 @@ struct
            Success of 'a * table ref | Miss | No
        and table =
            Table of {
-           char : char result,
-           token : string result,
-           trueexp : A.exp result ref,
-           falseexp : A.exp result ref,
-           ifexp : A.exp result ref,
-           zero : A.exp result ref,
-           succ : A.exp result ref,
-           pred : A.exp result ref,
-           iszero : A.exp result ref
-       } ref
-  val initTable () = ref
-                       {
-                       (* TODO *)
-                       }
-  val table : table = initTable ()
-  infix ++ **
-  fun parser1 ++ parser2 get1 table =
+             char : char result ref,
+             token : string result ref,
+             true : A.exp result ref,
+             false : A.exp result ref,
+             ifexp : A.exp result ref,
+             zero : A.exp result ref,
+             succ : A.exp result ref,
+             pred : A.exp result ref,
+             iszero : A.exp result ref,
+             exp : A.exp result ref
+           }
+  fun appResult f (Success (x, t)) = Success (f x, t)
+    | appResult _ Miss = Miss
+    | appResult _ No = No
+  fun look field (nowtable : table ref) =
+      case ! nowtable of
+          Table table => ! (field table)
+  fun update field nowtable result =
+      case ! nowtable of
+          Table table => (field table) := result
+  fun newTable () =
+      (ref (Table {
+               char = ref No,
+               token = ref No,
+               true = ref No,
+               false = ref No,
+               ifexp = ref No,
+               zero = ref No,
+               succ = ref No,
+               pred = ref No,
+               iszero = ref No,
+               exp = ref No
+      })) : table ref
+  infix ++ ** *** || *> <*
+  fun (parser1 ++ parser2) get1 table =
       case parser1 get1 table of
         Success (exp1, nextTable) => Success (exp1, nextTable)
       | Miss => parser2 get1 table
-      | No => Fail "Bug: ++"
-  fun parser1 ** parser2 mixer get1 table =
+      | No => raise Fail "Bug: ++"
+  fun (parser1 *> parser2) get1 table =
       case parser1 get1 table of
-        Success (exp1, nextTable) =>
-        (case parser2 get1 nextTable of
-           Success (exp2, resultTable) =>
-           Success (mixer exp1 exp2, resultTable)
-         |  => Miss
-         | No => Fail "Bug: **")
-      | Miss => Miss
-      | No => Fail "Bug: **"
-  fun parseCharPrim get1 table =
-      case #char !table of
+          Success (exp1, nextTable) =>
+          (case parser2 get1 nextTable of
+               Success (exp2, resultTable) =>
+               Success (exp2, resultTable)
+             | Miss => Miss
+             | No => raise Fail "Bug: right")
+        | Miss => Miss
+        | No => raise Fail "Bug: right"
+  fun (parser1 <* parser2) get1 table =
+      case parser1 get1 table of
+          Success (exp1, nextTable) =>
+          (case parser2 get1 nextTable of
+               Success (exp2, resultTable) =>
+               Success (exp1, resultTable)
+             | Miss => Miss
+             | No => raise Fail "Bug: left")
+        | Miss => Miss
+        | No => raise Fail "Bug: left"
+  fun (parser1 ** parser2) mixer get1 table =
+      case parser1 get1 table of
+          Success (exp1, nextTable) =>
+          (case parser2 get1 nextTable of
+               Success (exp2, resultTable) =>
+               Success (mixer exp1 exp2, resultTable)
+             | Miss => Miss
+             | No => raise Fail "Bug: **")
+        | Miss => Miss
+        | No => raise Fail "Bug: **"
+  fun (parser1 *** parser2) get1 table =
+      case parser1 get1 table of
+          Success (exp1, nextTable) =>
+          (case parser2 get1 nextTable of
+               Success (exp2, resultTable) =>
+               Success (exp1 ^ exp2, resultTable)
+             | Miss => Miss
+             | No => raise Fail "Bug: ***")
+        | Miss => Miss
+        | No => raise Fail "Bug: ***"
+  (*
+   *  note: take care if arguments have No or not.
+   *        this function "||" don't think No result.
+   *)
+  fun (x as Success _) || _ = x
+    | Miss || (x as Success _) = x
+    | _ || _ = Miss
+  fun parseChar get1 table =
+      case look #char table of
         x as Success (c, next) => x
       | Miss => raise Fail "parseCharPrim: Miss"
       | No => case get1 () of
-                SOME c => Success (c, initTable ())
-              | NONE => raise Fail "parseCharPrim: cannot get input character"
-  fun parseChar c get1 table =
+                  SOME c =>
+                  let val result = Success (c, newTable ())
+                  in update #char table result; result end
+                | NONE => raise Fail "parseCharPrim: cannot get input character"
+  fun skipSpace get1 table =
       case parseChar get1 table of
-        x as Success (c', next) => if c = parseChar get1 table then x else Miss
-      | Miss => raise Fail "parseChar: miss parseCharPrim"
-      | No   => raise Fail "parseChar: miss parseCharPrim"
-  fun parseTokenPrim nil nil get1 nextTable = Success ("", nextTable)
-    | parseTokenPrim nil _   _    _ = Miss
-    | parseTokenPrim _   nil get1 _ = Miss
-    | parseTokenPrim (c1::rest1) (c2::rest2) get1 table =
-      if c1 = c2 then           (* TODO *)
-      (parseChar c ** parseTokenPrim rest) (curry op ^) get1 table
-  fun parseTokenPrim get1 table =
-  (* TODO *)
-(*  fun parseToken str get1 table =
+          x as Success (c, next) =>
+          if Char.isSpace c then skipSpace get1 next
+          else Success ((), table)
+        | Miss => raise Fail "skipSpace: Miss"
+        | No => raise Fail "skipSpace: No"
+  fun eqCharResult c (Success (c', _)) = c = c'
+    | eqCharResult _ _ = false
+  fun parseEqChar c get1 table =
       let
-        val charList = explode str
+        val charresult = parseChar get1 table
       in
-        parseTokenPrim charList get1 table
-      end *)
-  fun parseToken str get1 table =
-      case #token (! table) of
-        x as Success (token, next) => if str = token then x else Miss
-      | Miss => Miss
-      | No => (parseTtokenPrim get1 table; parseToken str get1 table)
-  fun parse get1 () =           (* TODO *)
+        if eqCharResult c charresult then charresult
+        else Miss
+      end
+  fun resultConcat (Success (c1, _)) (Success (c2, table)) =
+      Success (c1 ^ c2, table)
+    | resultConcat _ Miss = Miss
+    | resultConcat _ _ = raise Fail "resultConcat: not success"
+  fun parseEqCharlist nil _ nowtable = Success ("", nowtable)
+    | parseEqCharlist (c::rest) get1 (nowTable : table ref) =
+      case parseEqChar c get1 nowTable of
+          x as Success (c', nextTable) =>
+          resultConcat (appResult str x) (parseEqCharlist rest get1 nextTable)
+        | Miss => Miss
+        | No => raise Fail "parseEqCharlist: No"
+  fun parseToken get1 table =
+      case look #token table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let val result = (skipSpace *>
+                            (parseEqCharlist (explode "true") ++
+                             parseEqCharlist (explode "false") ++
+                             parseEqCharlist (explode "if") ++
+                             parseEqCharlist (explode "then") ++
+                             parseEqCharlist (explode "else") ++
+                             parseEqCharlist (explode "0") ++
+                             parseEqCharlist (explode "succ") ++
+                             parseEqCharlist (explode "pred") ++
+                             parseEqCharlist (explode "iszero"))) get1 table
+          in update #token table result; result end
+  fun eqStrResult str (Success (str', _)) = str = str'
+    | eqStrResult _ _ = false
+  fun parseTokenStr str get1 table =
+      let val result = parseToken get1 table
+      in if eqStrResult str result then result else Miss end
+  fun parseFalse get1 table =
+      case look #false table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result = (parseTokenStr "false") get1 table
+            val result' = appResult (fn _ => A.False) result
+          in
+            update #false table result'; result'
+          end
+  fun parseTrue get1 table =
+      case look #true table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result = (parseTokenStr "true") get1 table
+            val result' = appResult (fn _ => A.True) result
+          in
+            update #true table result'; result'
+          end
+  fun parseZero get1 table =
+      case look #zero table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result = (parseTokenStr "0") get1 table
+            val result' = appResult (fn _ => A.Zero) result
+          in
+            update #zero table result'; result'
+          end
+  fun parseIszero get1 table =
+      case look #iszero table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result = (parseTokenStr "iszero" *> parseExp) get1 table
+            val result' = appResult A.IsZero result
+          in
+            update #iszero table result'; result'
+          end
+  and parsePred get1 table =
+      case look #pred table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result = (parseTokenStr "pred" *> parseExp) get1 table
+            val result' = appResult A.Pred result
+          in
+            update #pred table result'; result'
+          end
+  and parseSucc get1 table =
+      case look #succ table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result = (parseTokenStr "succ" *> parseExp) get1 table
+            val result' = appResult A.Succ result
+          in
+            update #succ table result'; result'
+          end
+  and parseIfexp get1 table =
+      case look #ifexp table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let
+            val result =
+                (((((parseTokenStr "if") *> parseExp <* parseTokenStr "then") **
+                     parseExp) (fn exp1 => fn exp2 => (exp1, exp2)) <*
+                     (parseTokenStr "else") ** parseExp)
+                   (fn (exp1, exp2) => fn exp3 => (exp1, exp2, exp3)))
+                  get1 table
+            val result' = appResult A.If result
+          in
+            update #ifexp table result'; result'
+          end
+  and parseExp get1 table =
+      case look #exp table of
+          x as Success _ => x
+        | Miss => Miss
+        | No =>
+          let val result = (parseIfexp ++ parseSucc ++ parsePred ++
+                            parseIszero ++ parseZero ++ parseTrue ++
+                            parseFalse) get1 table
+          in update #exp table result; result end
+  fun parse get1 () =
+      let
+        val initTable = newTable ()
+      in
+        case parseExp get1 initTable of
+            Success (exp, next) => SOME (exp, next)
+          | Miss => NONE
+          | No => raise Fail "parse: No"
+      end
   val consumeInput = ref ""
-  fun get1 () =
+  fun get1string () =
       let
         val nowInput = !consumeInput
-        val head = sub (nowInput, 0)
+        val head = String.sub (nowInput, 0)
         val tail = String.substring (nowInput, 1, size nowInput - 1)
         val () = consumeInput := tail
       in
@@ -94,57 +278,16 @@ struct
         handle Subscript => NONE
   fun stringParser input =
       let
-        val consumeInput := input
+        val () = consumeInput := (! consumeInput ^ input)
+        (* val () = consumeInput := input *) (* for test *)
       in
-        parser get1
+        parse get1string
       end
   fun mainParser () =
       let
-        fun get1 () = T.input1 T.stdIn
+        fun get1stdin () = T.input1 T.stdIn
       in
-        parser get1
+        parse get1stdin
       end
-
-type instream  <hidden>
-type outstream  <hidden>
-type vector = string
-val canInput = fn : TextIO.instream * int -> int option
-val closeIn = fn : TextIO.instream -> unit
-val closeOut = fn : TextIO.outstream -> unit
-val endOfStream = fn : TextIO.instream -> bool
-val flushOut = fn : TextIO.outstream -> unit
-val getInstream = fn : TextIO.instream -> TextIO.StreamIO.instream
-val getOutstream = fn : TextIO.outstream -> TextIO.StreamIO.outstream
-val getPosOut = fn : TextIO.outstream -> TextIO.StreamIO.out_pos
-val input = fn : TextIO.instream -> string
-val input1 = fn : TextIO.instream -> char option
-val inputAll = fn : TextIO.instream -> string
-val inputLine = fn : TextIO.instream -> string option
-val inputN = fn : TextIO.instream * int -> string
-val lookahead = fn : TextIO.instream -> char option
-val mkInstream = fn : TextIO.StreamIO.instream -> TextIO.instream
-val mkOutstream = fn : TextIO.StreamIO.outstream -> TextIO.outstream
-val openAppend = fn : string -> TextIO.outstream
-val openIn = fn : string -> TextIO.instream
-val openOut = fn : string -> TextIO.outstream
-val openString = fn : string -> TextIO.instream
-val output = fn : TextIO.outstream * string -> unit
-val output1 = fn : TextIO.outstream * char -> unit
-val outputSubstr = fn : TextIO.outstream * Substring.substring -> unit
-val print = fn : string -> unit
-val scanStream = fn
-  : ['a.
-      ((TextIO.StreamIO.instream
-          -> (char * TextIO.StreamIO.instream) option)
-         -> TextIO.StreamIO.instream
-              -> ('a * TextIO.StreamIO.instream) option)
-        -> TextIO.instream -> 'a option]
-val setInstream = fn : TextIO.instream * TextIO.StreamIO.instream -> unit
-val setOutstream = fn : TextIO.outstream * TextIO.StreamIO.outstream -> unit
-val setPosOut = fn : TextIO.outstream * TextIO.StreamIO.out_pos -> unit
-val stdErr = _ : TextIO.outstream
-val stdIn = _ : TextIO.instream
-val stdOut = _ : TextIO.outstream
-
-end
-
+end (* struct *)
+end (* local *)
