@@ -181,3 +181,5 @@ SmlsharpProgram (program, files) =
 
 .SUBDIRS: parser
 .PHONY: clean
+
+.DEFALT: SmlsharpProgram(main, main)

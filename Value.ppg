@@ -1,0 +1,14 @@
+structure Value =
+struct
+  datatype value =
+           (*%@format "true" *)
+           True
+         | (*%@format "false" *)
+           False
+         | (*%@format "0" *)
+           Zero
+         | (*%@format(exp) "succ(" exp ")" *)
+           Succ of value
+         | (*%@format(exp) "pred(" exp ")" *)
+           Pred of value
+end
